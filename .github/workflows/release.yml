@@ -18,7 +18,7 @@ jobs:
 
       - name: Create ZIP archive
         run: |
-          Compress-Archive -Path main_extatt.lsp, core, README.md -DestinationPath extatt.zip
+          Compress-Archive -Path main_extatt.lsp, README.md -DestinationPath extatt.zip
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
