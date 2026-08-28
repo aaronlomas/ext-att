@@ -1,6 +1,6 @@
 # extatt
 
-Herramienta en AutoLISP que extrae atributos de bloques seleccionados y los exporta a un archivo CSV compatible con Excel
+Herramienta en AutoLISP que extrae atributos de bloques seleccionados y los exporta a un archivo CSV. DALE LIKE(ESTRELLA) AL PROYECTO CAUSA! 🤙
 
 ## Requisitos
 
@@ -19,14 +19,14 @@ Herramienta en AutoLISP que extrae atributos de bloques seleccionados y los expo
 ## Uso
 
 1. Ejecuta el comando **`EXT-ATT`**.
-2. Selecciona los bloques (postes) uno por uno, en el orden deseado.
+2. Selecciona los bloques uno por uno, en el orden deseado.
 
    - Cada bloque seleccionado se registra y se muestra su número y código en la terminal.
    - Se dibuja en pantalla una **polilínea roja** que une los puntos en el orden de selección (clic 1 → clic 2 → clic 3 → …).
 
-3. Para deshacer el último bloque, escribe **`Z`** y pulsa Enter.
+3. Para deshacer la última acción, escribe **`Z`** y pulsa Enter.
 
-   - Elimina el ultimo registro de seleccion y vértice de la polilínea.
+   - Elimina el ultimo bloque registrado de la seleccion y último vértice de la polilínea dibujada.
 
 4. Pulsa **Enter** sin seleccionar nada o clic en vacío para terminar la selección y exportar.
 
