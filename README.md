@@ -12,10 +12,9 @@ Herramienta en AutoLISP que extrae atributos de bloques seleccionados y los expo
 1. Descarga el **release** más reciente (el ZIP incluye).
 2. Ejecuta el comando `APPLOAD`.
 3. Selecciona `main_extatt.lsp` y pulsa **Cargar**.
-4. El archivo carga automáticamente los módulos de `core/`.
-5. Confirma con **Cerrar**.
+4. Confirma con **Cerrar**.
 
-> Para que se cargue automáticamente en cada sesión, añade el archivo a la lista de arranque (botón **Contenido…** de `APPLOAD`), o carga cada `core\*.lsp` también desde `APPLOAD`.
+> Para que se cargue automáticamente en cada sesión, añade el archivo a la lista de arranque (botón **Contenido…** de `APPLOAD`).
 
 ## Uso
 
@@ -54,11 +53,6 @@ Herramienta en AutoLISP que extrae atributos de bloques seleccionados y los expo
 
 ## Estructura
 
-| Archivo                    | Responsabilidad                          |
-| -------------------------- | ---------------------------------------- |
-| `main_extatt.lsp`          | Punto de entrada y comando `EXT-ATT`.    |
-| `core/atributos.lsp`       | Utilidades y lectura de atributos.       |
-| `core/rutas.lsp`           | Carpeta de salida y nombre de archivo.   |
-| `core/exportar.lsp`        | Exportación a CSV.                       |
-| `core/polilinea.lsp`       | Dibujo de la polilínea roja.             |
-| `core/procesar.lsp`        | Registro de bloques seleccionados.       |
+| Archivo           | Responsabilidad                       |
+| ----------------- | ------------------------------------- |
+| `main_extatt.lsp` | Todo el código en un único archivo.   |
