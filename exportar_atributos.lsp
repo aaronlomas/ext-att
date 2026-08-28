@@ -1,7 +1,6 @@
-;;; seleccionar_bloques.lsp - Version v0.1.0
-;;; Exportación directa y limpia a CSV separado por punto y coma (;) para Excel en español.
-;;; Incluye opción de invalidar el último registro con la tecla Z.
-;;; Ahora muestra en la terminal el último Value de E-01 seleccionado.
+;;; seleccionar_bloques.lsp - Version v0.6.0
+;;; Exportación a CSV (separado por ; ) para Excel.
+;;; Z deshace último registro y último tramo; polilínea roja única en orden de clics.
 
 (defun SB:STR (v / )
   (cond
@@ -29,28 +28,27 @@
   result
 )
 
-(defun SB:CARPETA-DESTINO ( / shell desktop ruta dwg)
-  ;;; Calcula la carpeta de salida de forma robusta:
-  ;;; 1) WScript.Shell "Desktop" (maneja OneDrive/redirecciones),
-  ;;; 2) USERPROFILE\Desktop,
-  ;;; 3) directorio del dibujo actual,
-  ;;; 4) directorio actual de trabajo.
-  (vl-load-com)
-  (setq ruta nil
-        shell nil)
-  (setq shell (vl-catch-all-apply 'vlax-create-object (list "WScript.Shell")))
-  (if (and (not (vl-catch-all-error-p shell)) shell)
-    (progn
-      (setq desktop (vl-catch-all-apply 'vlax-invoke-property (list shell 'SpecialFolders "Desktop")))
-      (if (and (not (vl-catch-all-error-p desktop)) desktop)
-        (setq ruta desktop)
-      )
-      (vlax-release-object shell)
+(defun SB:CARPETA-DESTINO ( / up od dwg cand ruta)
+  ;;; Carpeta de salida sin ActiveX:
+  ;;; 1) Desktop del usuario, 2) OneDrive\\Desktop, 3) carpeta del dibujo.
+  (setq up (getenv "USERPROFILE")
+        od (getenv "OneDrive")
+        ruta nil)
+  (setq cand (list
+               (if up (strcat up "\\Desktop") nil)
+               (if od (strcat od "\\Desktop") nil)
+               (if up (strcat up "\\OneDrive\\Desktop") nil)
+             )
+  )
+  (foreach c cand
+    (if (and (null ruta) c (findfile (strcat c "\\")))
+      (setq ruta (strcat c "\\"))
     )
   )
+  ;; si ninguno confirmó existencia, usar el Desktop habitual igualmente
   (if (null ruta)
-    (if (and (setq desktop (getenv "USERPROFILE")) (/= desktop ""))
-      (setq ruta (strcat desktop "\\Desktop"))
+    (if (and up (/= up ""))
+      (setq ruta (strcat up "\\Desktop\\"))
     )
   )
   (if (null ruta)
@@ -72,7 +70,7 @@
            (setq archivo (strcat carpeta "data_extatt_"
                           (if (< i 10) "0" "") (itoa i) ".csv"))
            ;;; el bucle continúa mientras el archivo ya exista
-           (vl-file-size archivo)
+           (findfile archivo)
          )
   )
   archivo
@@ -142,7 +140,9 @@
   (princ)
 )
 
-(defun SB:PROCESAR (ename data-list / etype edata pt x y reg padre)
+(defun SB:PROCESAR (ename pick / etype edata pt x y px py reg padre)
+  (setq px (if pick (car pick) nil)
+        py (if pick (cadr pick) nil))
   (setq edata (entget ename))
   (setq etype (SB:STR (cdr (assoc 0 edata))))
   (if (= etype "ATTRIB")
@@ -155,14 +155,98 @@
       (setq pt (cdr (assoc 10 edata)))
       (setq x (if pt (car pt) 0.0))
       (setq y (if pt (cadr pt) 0.0))
-      (setq reg (list ename "INSERT" x y))
+      ;; reg: ename, tipo, inserción x/y (para el CSV), clic x/y (para la polilínea)
+      (setq reg (list ename "INSERT" x y px py))
     )
   )
   reg
 )
 
-(defun c:EXT-ATT ( / ent reg data-list total val-e)
-  (setq data-list nil)
+(defun SB:CAPLINA ( / nombre ed c)
+  ;;; Garantiza la capa roja EXT-ATT-PLINE (la crea o corrige su color).
+  (setq nombre "EXT-ATT-PLINE")
+  (if (null (tblsearch "LAYER" nombre))
+    (entmake (list '(0 . "LAYER")
+                   '(100 . "AcDbSymbolTableRecord")
+                   '(100 . "AcDbLayerTableRecord")
+                   (cons 2 nombre)
+                   '(70 . 0)
+                   '(62 . 1)
+                   '(6 . "Continuous")))
+    (progn
+      (setq ed (entget (tblobjname "LAYER" nombre)))
+      (if (/= (abs (if (setq c (cdr (assoc 62 ed))) c 0)) 1)
+        (progn
+          (setq ed (subst '(62 . 1) (assoc 62 ed) ed))
+          (entmod ed)
+        )
+      )
+    )
+  )
+)
+
+(defun SB:DIBUJAR-PLINE (data-list pline / pts n ed aux px py)
+  ;;; Dibuja/actualiza la polilínea roja de la SESIÓN con el ORDEN de los clics.
+  ;;; Hay una única polilínea: se crea con entmake (ename vía entlast) y luego se
+  ;;; modifica EN SITIO con entmod/entupd al añadir o deshacer clics.
+  (SB:CAPLINA)
+  (setq pts nil)
+  (foreach reg data-list
+    (setq px (nth 4 reg)
+          py (nth 5 reg))
+    ;; si no hay clic registrado, usar el centro del bloque
+    (if (null px) (setq px (nth 2 reg)))
+    (if (null py) (setq py (nth 3 reg)))
+    (setq pts (cons (list 10 px py) pts))
+  )
+  (setq pts (reverse pts))
+  (setq n (length pts))
+  (if (> n 1)
+    (if (and pline (= (type pline) 'ENAME) (entget pline))
+      (progn
+        ;; actualizar vértices conservando su orden
+        (setq ed (entget pline)
+              aux nil)
+        (foreach g ed
+          (if (/= (car g) 10)
+            (setq aux (cons g aux))
+          )
+        )
+        (setq ed (append (reverse aux) pts))
+        (setq ed (subst (cons 90 n) (assoc 90 ed) ed))
+        (entmod ed)
+        (entupd pline)
+        pline
+      )
+      (progn
+        ;; crear la polilínea y tomar su ename con entlast
+        (entmake
+          (append
+            (list '(0 . "LWPOLYLINE")
+                  '(100 . "AcDbEntity")
+                  '(100 . "AcDbPolyline")
+                  '(70 . 0)
+                  '(62 . 1)
+                  (cons 90 n)
+                  (cons 8 "EXT-ATT-PLINE"))
+            pts
+          )
+        )
+        (entlast)
+      )
+    )
+    (progn
+      ;; 0 o 1 clic: quitar la polilínea de la sesión
+      (if (and pline (= (type pline) 'ENAME) (entget pline))
+        (entdel pline)
+      )
+      nil
+    )
+  )
+)
+
+(defun c:EXT-ATT ( / ent reg data-list total val-e val-num val-fat last idx pline)
+  (setq data-list nil pline nil)
   (princ "\n------------------------------------------\n")
   (princ "  Extrae Values de bloques y se exporta a excel\n")
   (princ "  ENTER para terminar, Z para invalidar último.\n")
@@ -183,27 +267,36 @@
           (setq val-fat (SB:GET-VAL-ATTR (car last) "FAT(01)"))
           (princ (strcat "- Eliminado: #" (itoa idx)
                          " - BLQ: " (SB:STR val-e)(SB:STR val-num)(SB:STR val-fat) "\n"))
-          ;; quitar último registro
+          ;; quitar último registro y redibujar la polilínea sin el último tramo
           (setq data-list (reverse (cdr (reverse data-list))))
           (setq total (length data-list))
+          (setq pline (SB:DIBUJAR-PLINE data-list pline))
         )
         (princ "\nNo hay registros para eliminar.\n")
       )
       ;; Caso normal: registrar bloque
       (progn
-        (setq reg (SB:PROCESAR (car ent) data-list))
-        (if reg
+        (if (= (cdr (assoc 0 (entget (car ent)))) "LWPOLYLINE")
+          ;; La polilínea roja intercepta el clic: re-preguntar sin fallar
+          (princ "\nEvite la polilínea roja: pulse sobre el bloque.\n")
           (progn
-            (setq data-list (append data-list (list reg)))
-            (setq total (length data-list))
-            ;; Mostrar número y último Value de E-01
-            (setq val-e (SB:GET-VAL-ATTR (car reg) "E-01"))
-            (setq val-num (SB:GET-VAL-ATTR (car reg) "NUMERACION"))
-            (setq val-fat (SB:GET-VAL-ATTR (car reg) "FAT(01)"))
-            (princ (strcat "#" (itoa total)
-                           " -> BLQ: " (SB:STR val-e)(SB:STR val-num)(SB:STR val-fat) "\n"))
+            (setq reg (SB:PROCESAR (car ent) (cadr ent)))
+            (if reg
+              (progn
+                (setq data-list (append data-list (list reg)))
+                (setq total (length data-list))
+                ;; Dibujar la polilínea roja con los puntos del clic en orden
+                (setq pline (SB:DIBUJAR-PLINE data-list pline))
+                ;; Mostrar número y último Value de E-01
+                (setq val-e (SB:GET-VAL-ATTR (car reg) "E-01"))
+                (setq val-num (SB:GET-VAL-ATTR (car reg) "NUMERACION"))
+                (setq val-fat (SB:GET-VAL-ATTR (car reg) "FAT(01)"))
+                (princ (strcat "#" (itoa total)
+                               " -> BLQ: " (SB:STR val-e)(SB:STR val-num)(SB:STR val-fat) "\n"))
+              )
+              (princ "\n[ERROR] Selección inválida.\n")
+            )
           )
-          (princ "\n[ERROR] Selección inválida.\n")
         )
       )
     )
