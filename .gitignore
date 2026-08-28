@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Entornos
+.env
+.env.*
+
+# Archivos generados por el plugin
+*.csv
+
+# Excel temporal
+~$*.xlsx
+*.xlsx.tmp
+
+# IDE / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
