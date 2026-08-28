@@ -1,4 +1,4 @@
-name: ExtAtt Code Quality
+name: ExtAtt Code-Quality
 
 on:
   push:
