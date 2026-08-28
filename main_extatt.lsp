@@ -215,6 +215,9 @@
             (setq x (nth 2 item))
             (setq y (nth 3 item))
             (setq val-e    (SB:GET-VAL-ATTR ename "E-01"))
+            (setq val-se   (SB:GET-VAL-ATTR ename "SE-01"))
+            (setq val-et   (SB:GET-VAL-ATTR ename "ET-01"))
+            (setq val-p    (SB:GET-VAL-ATTR ename "P-01"))
             (setq val-sc   (SB:GET-VAL-ATTR ename "SC/H=9M"))
             (setq val-elec (SB:GET-VAL-ATTR ename "01/ELEC/--"))
             (setq val-num  (SB:GET-VAL-ATTR ename "NUMERACION"))
@@ -224,7 +227,7 @@
             )
             (write-line
               (strcat (itoa idx) ";"
-                      (SB:STR val-e)(SB:STR val-num) ";"
+                      (SB:STR val-e)(SB:STR val-se)(SB:STR val-et)(SB:STR val-p)(SB:STR val-num) ";"
                       (SB:STR val-sc) ";"
                       (SB:STR val-elec) ";"
                       (SB:STR val-fat) ";"
