@@ -1,4 +1,4 @@
-;;; main_extatt.lsp - Version v1.0.0 (archivo unico)
+;;; main_extatt.lsp - Version v0.1.0
 
 ;;; ================================================================
 ;;; UTILIDADES GENERALES Y LECTURA DE ATRIBUTOS
