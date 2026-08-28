@@ -1,6 +1,6 @@
 # extatt
 
-Herramienta en AutoLISP que extrae atributos de bloques seleccionados y los exporta a un archivo CSV. DALE LIKE(ESTRELLA) AL PROYECTO CAUSA! 🤙
+Herramienta en AutoLISP que extrae atributos de bloques seleccionados y los exporta a un archivo CSV. DALE UNA ESTRELLITA CAUSA! 🤙, Parte superior derecha.
 
 ## Requisitos
 
