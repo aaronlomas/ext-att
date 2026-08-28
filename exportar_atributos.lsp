@@ -186,9 +186,7 @@
 )
 
 (defun SB:DIBUJAR-PLINE (data-list pline / pts n ed aux px py)
-  ;;; Dibuja/actualiza la polilínea roja de la SESIÓN con el ORDEN de los clics.
-  ;;; Hay una única polilínea: se crea con entmake (ename vía entlast) y luego se
-  ;;; modifica EN SITIO con entmod/entupd al añadir o deshacer clics.
+  ;;; Dibuja/actualiza la polilínea roja.
   (SB:CAPLINA)
   (setq pts nil)
   (foreach reg data-list
