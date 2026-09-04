@@ -1,4 +1,4 @@
-;;; main_extatt.lsp - Version v0.1.0
+;;; main_extatt.lsp - Version v1.0.0 (archivo unico)
 
 ;;; ================================================================
 ;;; UTILIDADES GENERALES Y LECTURA DE ATRIBUTOS
@@ -161,6 +161,42 @@
 )
 
 ;;; ================================================================
+;;; DIBUJO DE CIRCULO ROJO (FAT)
+;;; ================================================================
+
+(defun SB:DIBUJAR-CIRCULO (pt / nombre ed c)
+  (setq nombre "EXT-ATT-CIRCLE")
+  (if (null (tblsearch "LAYER" nombre))
+    (entmake (list '(0 . "LAYER")
+                   '(100 . "AcDbSymbolTableRecord")
+                   '(100 . "AcDbLayerTableRecord")
+                   (cons 2 nombre)
+                   '(70 . 0)
+                   '(62 . 1)
+                   '(6 . "Continuous")))
+    (progn
+      (setq ed (entget (tblobjname "LAYER" nombre)))
+      (if (/= (abs (if (setq c (cdr (assoc 62 ed))) c 0)) 1)
+        (progn
+          (setq ed (subst '(62 . 1) (assoc 62 ed) ed))
+          (entmod ed)
+        )
+      )
+    )
+  )
+  (entmake
+    (list '(0 . "CIRCLE")
+          '(100 . "AcDbEntity")
+          '(100 . "AcDbCircle")
+          (cons 10 pt)
+          '(40 . 7.0)
+          '(62 . 1)
+          (cons 8 nombre))
+  )
+  (entlast)
+)
+
+;;; ================================================================
 ;;; PROCESAMIENTO DE ENTIDADES SELECCIONADAS
 ;;; ================================================================
 
@@ -179,7 +215,7 @@
       (setq pt (cdr (assoc 10 edata)))
       (setq x (if pt (car pt) 0.0))
       (setq y (if pt (cadr pt) 0.0))
-      (setq reg (list ename "INSERT" x y px py))
+      (setq reg (list ename "INSERT" x y px py 0 0 0))
     )
   )
   reg
@@ -189,7 +225,7 @@
 ;;; EXPORTACION A CSV
 ;;; ================================================================
 
-(defun SB:EXPORTAR (data-list / ruta fp idx item ename x y val-e val-sc val-elec val-num val-fat seguir)
+(defun SB:EXPORTAR (data-list / ruta fp idx item ename x y val-e val-sc val-elec val-num val-fat val-in val-out seguir)
   (if (and data-list (> (length data-list) 0))
     (progn
       (setq ruta (SB:RUTA-CSV))
@@ -207,7 +243,7 @@
       )
       (if fp
         (progn
-          (write-line "No.;Codigo_Poste;Estructura;descripcion;FAT;Coordenada_X;Coordenada_Y" fp)
+          (write-line "No.;Codigo_Poste;Estructura;descripcion;FAT;IN;OUT;Coordenada_X;Coordenada_Y" fp)
           (setq idx 0)
           (foreach item data-list
             (setq idx (1+ idx))
@@ -215,22 +251,23 @@
             (setq x (nth 2 item))
             (setq y (nth 3 item))
             (setq val-e    (SB:GET-VAL-ATTR ename "E-01"))
-            (setq val-se   (SB:GET-VAL-ATTR ename "SE-01"))
-            (setq val-et   (SB:GET-VAL-ATTR ename "ET-01"))
-            (setq val-p    (SB:GET-VAL-ATTR ename "P-01"))
             (setq val-sc   (SB:GET-VAL-ATTR ename "SC/H=9M"))
             (setq val-elec (SB:GET-VAL-ATTR ename "01/ELEC/--"))
             (setq val-num  (SB:GET-VAL-ATTR ename "NUMERACION"))
             (setq val-fat  (SB:GET-VAL-ATTR ename "FAT(01)"))
+            (setq val-in   (nth 6 item))
+            (setq val-out  (nth 7 item))
             (if (and (= val-e "") (= val-sc "") (= val-elec "") (= val-num ""))
               (setq x "" y "")
             )
             (write-line
               (strcat (itoa idx) ";"
-                      (SB:STR val-e)(SB:STR val-se)(SB:STR val-et)(SB:STR val-p)(SB:STR val-num) ";"
+                      (SB:STR val-e)(SB:STR val-num) ";"
                       (SB:STR val-sc) ";"
                       (SB:STR val-elec) ";"
                       (SB:STR val-fat) ";"
+                      (itoa val-in) ";"
+                      (itoa val-out) ";"
                       (SB:STR x) ";"
                       (SB:STR y))
               fp)
@@ -253,16 +290,17 @@
 ;;; COMANDO PRINCIPAL: EXT-ATT
 ;;; ================================================================
 
-(defun c:EXT-ATT ( / ent reg data-list total val-e val-num val-fat last idx pline)
-  (setq data-list nil pline nil)
+(defun c:EXT-ATT ( / ent reg data-list total val-e val-num val-fat val-elec last idx pline toggle-in-out last-reg)
+  (setq data-list nil pline nil toggle-in-out 0)
   (princ "\n------------------------------------------\n")
   (princ "  Extrae Values de bloques y se exporta a excel\n")
   (princ "  ENTER para terminar, Z para invalidar ultimo.\n")
+  (princ "  Presione 1 para IN/OUT en FAT (+10).\n")
   (princ "--------------------------------------------\n\n")
 
   (while (progn
-           (initget "Z")
-           (setq ent (entsel "\nSeleccione un bloque o [Z] para Deshacer: "))
+           (initget "Z 1")
+           (setq ent (entsel "\nSeleccione un bloque, [Z] Deshacer, [1] IN/OUT: "))
         )
     (if (= ent "Z")
       (if data-list
@@ -272,6 +310,7 @@
           (setq val-e (SB:GET-VAL-ATTR (car last) "E-01"))
           (setq val-num (SB:GET-VAL-ATTR (car last) "NUMERACION"))
           (setq val-fat (SB:GET-VAL-ATTR (car last) "FAT(01)"))
+          (setq toggle-in-out (nth 8 last))
           (princ (strcat "- Eliminado: #" (itoa idx)
                          " - BLQ: " (SB:STR val-e)(SB:STR val-num)(SB:STR val-fat) "\n"))
           (setq data-list (reverse (cdr (reverse data-list))))
@@ -280,23 +319,60 @@
         )
         (princ "\nNo hay registros para eliminar.\n")
       )
-      (progn
-        (if (= (cdr (assoc 0 (entget (car ent)))) "LWPOLYLINE")
-          (princ "\nEvite la polilinea roja: pulse sobre el bloque.\n")
-          (progn
-            (setq reg (SB:PROCESAR (car ent) (cadr ent)))
-            (if reg
-              (progn
-                (setq data-list (append data-list (list reg)))
-                (setq total (length data-list))
-                (setq pline (SB:DIBUJAR-PLINE data-list pline))
-                (setq val-e (SB:GET-VAL-ATTR (car reg) "E-01"))
-                (setq val-num (SB:GET-VAL-ATTR (car reg) "NUMERACION"))
-                (setq val-fat (SB:GET-VAL-ATTR (car reg) "FAT(01)"))
-                (princ (strcat "#" (itoa total)
-                               " -> BLQ: " (SB:STR val-e)(SB:STR val-num)(SB:STR val-fat) "\n"))
+      (if (= ent "1")
+        (progn
+          (if data-list
+            (progn
+              (setq last-reg (car (reverse data-list)))
+              (setq val-fat (SB:GET-VAL-ATTR (car last-reg) "FAT(01)"))
+              (if (and val-fat (/= val-fat "") (/= val-fat " "))
+                (progn
+                  (if (= toggle-in-out 0)
+                    (progn
+                      (setq last-reg (list (car last-reg) (nth 1 last-reg) (nth 2 last-reg) (nth 3 last-reg) (nth 4 last-reg) (nth 5 last-reg) (+ (nth 6 last-reg) 10) (nth 7 last-reg) 1))
+                      (setq data-list (reverse (cons last-reg (cdr (reverse data-list)))))
+                      (princ (strcat "\n>> IN: +" (itoa 10) " (Total: " (itoa (nth 6 last-reg)) ") [FAT]\n"))
+                    )
+                    (progn
+                      (setq last-reg (list (car last-reg) (nth 1 last-reg) (nth 2 last-reg) (nth 3 last-reg) (nth 4 last-reg) (nth 5 last-reg) (nth 6 last-reg) (+ (nth 7 last-reg) 10) 0))
+                      (setq data-list (reverse (cons last-reg (cdr (reverse data-list)))))
+                      (princ (strcat "\n>> OUT: +" (itoa 10) " (Total: " (itoa (nth 7 last-reg)) ") [FAT]\n"))
+                    )
+                  )
+                  (setq toggle-in-out (- 1 toggle-in-out))
+                )
+                (princ "\nEl ultimo bloque no tiene FAT. Seleccione uno con FAT primero.\n")
               )
-              (princ "\n[ERROR] Seleccion invalida.\n")
+            )
+            (princ "\nNo hay registros. Seleccione un bloque primero.\n")
+          )
+        )
+        (if (and ent (listp ent))
+          (if (= (cdr (assoc 0 (entget (car ent)))) "LWPOLYLINE")
+            (princ "\nEvite la polilinea roja: pulse sobre el bloque.\n")
+            (progn
+              (setq reg (SB:PROCESAR (car ent) (cadr ent)))
+              (if reg
+                (progn
+                  (setq data-list (append data-list (list reg)))
+                  (setq total (length data-list))
+                  (setq pline (SB:DIBUJAR-PLINE data-list pline))
+                  (setq val-e (SB:GET-VAL-ATTR (car reg) "E-01"))
+                  (setq val-num (SB:GET-VAL-ATTR (car reg) "NUMERACION"))
+                  (setq val-fat (SB:GET-VAL-ATTR (car reg) "FAT(01)"))
+                  (setq val-elec (SB:GET-VAL-ATTR (car reg) "01/ELEC/--"))
+                  (princ (strcat "#" (itoa total)
+                                 " -> BLQ: " (SB:STR val-e)(SB:STR val-num)(SB:STR val-fat) "\n"))
+                  (if (and val-fat (/= val-fat "") (/= val-fat " "))
+                    (progn
+                      (SB:DIBUJAR-CIRCULO (cdr (assoc 10 (entget (car reg)))))
+                      (princ (strcat "  [FAT detectado] Circulo rojo dibujado.\n"))
+                      (setq toggle-in-out 0)
+                    )
+                  )
+                )
+                (princ "\n[ERROR] Seleccion invalida.\n")
+              )
             )
           )
         )
